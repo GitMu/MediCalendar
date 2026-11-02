@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MediCalendar">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:0}body{margin:0}[hidden]{display:none!important}</style>
+<script>window.__MEDICAL_PWA__=true</script>
+<title>MediCalendar</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+<style>
+/* Layout : une colonne façon pilulier — bande de la semaine, puis compartiments Matin / Midi / Soir. */
+:root{
+  --primary:#C8102E;          /* couleur de l'app (réglable) */
+  --bg:#FFFFFF;               /* fond (réglable) */
+  --ink:#1F1416;              /* texte, calculé selon le fond */
+  --on-primary:#FFFFFF;       /* texte sur la couleur principale */
+  --muted:color-mix(in srgb,var(--ink) 58%,var(--bg));
+  --line:color-mix(in srgb,var(--ink) 11%,var(--bg));
+  --surface:color-mix(in srgb,var(--primary) 5%,var(--bg));
+  --tint:color-mix(in srgb,var(--primary) 12%,var(--bg));
+  --ok:#2E7D4F;
+  --f-display:"Bricolage Grotesque",ui-rounded,"Segoe UI",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--f-body);font-size:17px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid color-mix(in srgb,var(--primary) 60%,transparent);outline-offset:2px}
+.app{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px calc(96px + env(safe-area-inset-bottom,0px))}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:1.9rem;font-weight:800;line-height:1.05}
+h2{font-size:1.15rem;font-weight:600}
+.eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700}
+.view{display:flex;flex-direction:column;gap:22px}
+
+/* En-tête */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:6px 18px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:800;font-size:1.15rem}
+.brand svg{width:34px;height:34px;flex:none;border-radius:9px;box-shadow:0 0 0 1px var(--line)}
+.iconbtn{width:44px;height:44px;border-radius:50%;border:none;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;font-size:1.6rem;line-height:1}
+
+/* Bande semaine (couvercles du pilulier) */
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px 10px;border-radius:12px;background:var(--surface);font-variant-numeric:tabular-nums}
+.day .l{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase}
+.day .n{font-family:var(--f-display);font-weight:600;font-size:1.05rem}
+.day .bar{width:70%;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.day .bar i{display:block;height:100%;background:var(--primary)}
+.day.today{background:var(--primary);color:var(--on-primary)}
+.day.today .l{color:inherit;opacity:.85}
+.day.today .bar{background:color-mix(in srgb,var(--on-primary) 30%,transparent)}
+.day.today .bar i{background:var(--on-primary)}
+
+.hero{display:flex;flex-direction:column;gap:4px}
+.hero .count{font-family:var(--f-display);font-weight:800;font-size:3.2rem;line-height:1;color:var(--primary);font-variant-numeric:tabular-nums}
+
+/* Alertes de commande */
+.alert{border:2px solid var(--primary);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.alert .t{font-weight:700}
+.alert .s{color:var(--muted);font-size:.95rem}
+.alert .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.note{background:var(--surface);border-radius:var(--r);padding:12px 14px;font-size:.95rem;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+
+/* Compartiments */
+.slot{display:flex;flex-direction:column;gap:8px}
+.slot-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;border-bottom:2px solid var(--ink);padding-bottom:6px}
+.slot-h .time{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.95rem}
+.dose{display:flex;align-items:center;gap:14px;padding:10px 4px;border-bottom:1px solid var(--line);transition:opacity .3s,transform .3s}
+.dose.leaving{opacity:0;transform:translateX(24px)}
+.dose .txt{min-width:0;flex:1;display:flex;flex-direction:column}
+.dose .name{font-weight:700;font-size:1.08rem;overflow-wrap:anywhere}
+.dose .meal{color:var(--muted);font-size:.92rem}
+.dose.taken .name{text-decoration:line-through;color:var(--muted)}
+.box{flex:none;width:44px;height:44px;border-radius:12px;border:2.5px solid var(--primary);background:var(--bg);display:grid;place-items:center;padding:0}
+.box svg{width:24px;height:24px;opacity:0}
+.box[aria-checked="true"]{background:var(--primary)}
+.box[aria-checked="true"] svg{opacity:1;color:var(--on-primary)}
+.done{text-align:center;padding:28px 12px;border-radius:var(--r);background:var(--surface);display:flex;flex-direction:column;gap:6px;align-items:center}
+.done .big{font-family:var(--f-display);font-weight:800;font-size:1.4rem}
+.linkbtn{background:none;border:none;color:var(--primary);font-weight:700;padding:6px 0;text-align:left}
+
+/* Boutons */
+.btn-primary{background:var(--primary);color:var(--on-primary);border:none;border-radius:999px;padding:12px 20px;font-weight:700}
+.btn-ghost{background:transparent;color:var(--primary);border:2px solid var(--primary);border-radius:999px;padding:10px 18px;font-weight:700}
+.btn-sm{padding:8px 14px;font-size:.95rem}
+.danger{color:#B3261E;border-color:#B3261E}
+
+/* Liste des traitements */
+.list{display:flex;flex-direction:column}
+.item{display:flex;align-items:center;gap:12px;padding:14px 4px;border:none;border-bottom:1px solid var(--line);background:none;text-align:left;width:100%}
+.item .txt{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.item .name{font-weight:700;font-size:1.08rem}
+.item .sum{color:var(--muted);font-size:.93rem}
+.item .chev{color:var(--muted);font-size:1.4rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;background:var(--tint);color:var(--primary);border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:2px}
+
+/* Formulaire */
+.viewhead{display:flex;flex-direction:column;gap:6px}
+.back{align-self:flex-start}
+form{display:flex;flex-direction:column;gap:22px}
+fieldset{border:none;margin:0;padding:0;min-width:0}
+.field{display:flex;flex-direction:column;gap:8px}
+.field>label,legend{font-weight:700;padding:0;margin-bottom:8px}
+.field>label{margin-bottom:0}
+input[type=text],input:not([type]),input[type=number],input[type=date],input[type=time],select{border:2px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--bg);min-height:48px;width:100%}
+input:focus,select:focus{border-color:var(--primary);outline:none}
+input[type=number]{width:5.2em;text-align:center}
+select{width:auto}
+.inline{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.inline input[type=date]{width:auto}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:2px solid var(--line);background:var(--bg);border-radius:999px;padding:9px 16px;font-weight:700;min-height:44px}
+.chip[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.days .chip{width:44px;padding:0;text-align:center}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{border:2px solid var(--line);border-radius:12px;padding:10px 14px;font-weight:700;min-height:44px;display:flex;align-items:center;cursor:pointer}
+.seg input:checked+label{border-color:var(--primary);background:var(--tint);color:var(--primary)}
+.seg input:focus-visible+label{outline:3px solid color-mix(in srgb,var(--primary) 60%,transparent)}
+.sub{margin-top:12px;display:flex;flex-direction:column;gap:12px}
+.check{display:flex;gap:12px;align-items:center;font-weight:700}
+.check input{width:24px;height:24px;accent-color:var(--primary);flex:none}
+.error{color:#B3261E;font-weight:700;margin:0}
+.actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between}
+
+/* Réglages */
+.card{display:flex;flex-direction:column;gap:12px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.times{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.times label{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:.95rem}
+.times input{padding:10px 6px;font-variant-numeric:tabular-nums}
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.sw{width:52px;height:52px;border-radius:14px;border:2px solid var(--line);padding:0;position:relative;overflow:hidden}
+.sw span{position:absolute;inset:auto 0 0 0;height:45%}
+.sw[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 2px var(--bg) inset}
+.pickers{display:flex;flex-wrap:wrap;gap:16px}
+.pickers label{display:flex;align-items:center;gap:10px;font-weight:700}
+input[type=color]{width:48px;height:40px;border:2px solid var(--line);border-radius:10px;padding:2px;background:var(--bg)}
+.muted{color:var(--muted);font-size:.95rem;margin:0}
+.status{font-weight:700}
+
+/* Barre d'onglets */
+.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px));z-index:5}
+.tabs div{display:grid;grid-template-columns:repeat(3,1fr);width:100%;max-width:560px}
+.tab{background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px 8px;color:var(--muted);font-size:.8rem;font-weight:700;position:relative}
+.tab svg{width:24px;height:24px}
+.tab[aria-current="page"]{color:var(--primary)}
+.tab .pill{position:absolute;top:4px;left:calc(50% + 6px);background:var(--primary);color:var(--on-primary);font-size:.7rem;min-width:18px;height:18px;border-radius:9px;display:grid;place-items:center;padding:0 5px;font-variant-numeric:tabular-nums}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;font-weight:700;z-index:9;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 512 512" aria-hidden="true"><use href="#caducee"/></svg>
+      <span>MediCalendar</span>
+    </div>
+    <button class="iconbtn" id="quick-add" aria-label="Ajouter un médicament">+</button>
+  </header>
+
+  <main>
+    <section id="v-today" class="view" aria-labelledby="today-title"></section>
+
+    <section id="v-meds" class="view" hidden>
+      <div class="viewhead">
+        <span class="eyebrow">Traitements</span>
+        <h1>Mes médicaments</h1>
+      </div>
+      <div id="meds-list" class="list"></div>
+      <div><button class="btn-primary" data-new>+ Ajouter un médicament</button></div>
+    </section>
+
+    <section id="v-settings" class="view" hidden>
+      <div class="viewhead">
+        <span class="eyebrow">Paramètres</span>
+        <h1>Réglages</h1>
+      </div>
+
+      <div class="card">
+        <h2>Heures de rappel</h2>
+        <div class="times">
+          <label for="t-matin">Matin<input type="time" id="t-matin"></label>
+          <label for="t-midi">Midi<input type="time" id="t-midi"></label>
+          <label for="t-soir">Soir<input type="time" id="t-soir"></label>
+        </div>
+        <p class="muted">Le rappel de commande arrive à l'heure du matin.</p>
+      </div>
+
+      <div class="card">
+        <h2>Notifications</h2>
+        <p class="status" id="notif-status"></p>
+        <div><button class="btn-ghost btn-sm" id="notif-btn">Activer les notifications</button></div>
+        <p class="muted" id="install-hint">Sur iPhone, ouvrez l'app dans Safari, touchez Partager puis « Sur l'écran d'accueil ». Les notifications et la pastille ne fonctionnent qu'une fois l'app installée.</p>
+      </div>
+
+      <div class="card">
+        <h2>Couleurs</h2>
+        <div class="swatches" id="swatches"></div>
+        <div class="pickers">
+          <label for="c-primary"><input type="color" id="c-primary">Couleur principale</label>
+          <label for="c-bg"><input type="color" id="c-bg">Fond</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Données</h2>
+        <p class="muted">Vos traitements restent sur cet appareil.</p>
+        <div><button class="btn-ghost btn-sm danger" id="reset-all">Effacer toutes les données</button></div>
+      </div>
+    </section>
+
+    <section id="v-form" class="view" hidden>
+      <div class="viewhead">
+        <button class="linkbtn back" data-go="meds">← Retour</button>
+        <h1 id="form-title">Nouveau médicament</h1>
+      </div>
+      <form id="medform" novalidate>
+        <div class="field">
+          <label for="f-name">Nom du médicament</label>
+          <input id="f-name" type="text" autocomplete="off" placeholder="Ex. Doliprane 1000 mg">
+        </div>
+
+        <fieldset class="field">
+          <legend>Moment de prise</legend>
+          <div class="chips" id="f-moments">
+            <button type="button" class="chip" data-v="matin" aria-pressed="false">Matin</button>
+            <button type="button" class="chip" data-v="midi" aria-pressed="false">Midi</button>
+            <button type="button" class="chip" data-v="soir" aria-pressed="false">Soir</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend>Par rapport au repas</legend>
+          <div class="seg">
+            <input type="radio" name="meal" id="m-avant" value="avant"><label for="m-avant">Avant</label>
+            <input type="radio" name="meal" id="m-pendant" value="pendant"><label for="m-pendant">Pendant</label>
+            <input type="radio" name="meal" id="m-apres" value="apres"><label for="m-apres">Après</label>
+            <input type="radio" name="meal" id="m-aucune" value="aucune"><label for="m-aucune">Sans préférence</label>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend>Fréquence</legend>
+          <div class="seg">
+            <input type="radio" name="mode" id="r-daily" value="daily"><label for="r-daily">Tous les jours</label>
+            <input type="radio" name="mode" id="r-week" value="weekdays"><label for="r-week">Certains jours</label>
+            <input type="radio" name="mode" id="r-int" value="interval"><label for="r-int">Régulièrement</label>
+          </div>
+          <div class="sub" id="f-days-wrap" hidden>
+            <div class="chips days" id="f-days" aria-label="Jours de prise">
+              <button type="button" class="chip" data-v="1" aria-pressed="false" aria-label="Lundi">L</button>
+              <button type="button" class="chip" data-v="2" aria-pressed="false" aria-label="Mardi">M</button>
+              <button type="button" class="chip" data-v="3" aria-pressed="false" aria-label="Mercredi">M</button>
+              <button type="button" class="chip" data-v="4" aria-pressed="false" aria-label="Jeudi">J</button>
+              <button type="button" class="chip" data-v="5" aria-pressed="false" aria-label="Vendredi">V</button>
+              <button type="button" class="chip" data-v="6" aria-pressed="false" aria-label="Samedi">S</button>
+              <button type="button" class="chip" data-v="0" aria-pressed="false" aria-label="Dimanche">D</button>
+            </div>
+          </div>
+          <div class="sub" id="f-int-wrap" hidden>
+            <div class="inline">
+              <span>Tous les</span>
+              <input type="number" id="f-int-n" min="1" max="365" value="2" aria-label="Nombre">
+              <select id="f-int-u" aria-label="Unité">
+                <option value="jours">jours</option><option value="semaines">semaines</option><option value="mois">mois</option>
+              </select>
+            </div>
+            <div class="inline">
+              <label for="f-int-start">À partir du</label>
+              <input type="date" id="f-int-start">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <label class="check" for="f-order"><input type="checkbox" id="f-order">À commander à l'avance à la pharmacie</label>
+          <div class="sub" id="f-order-wrap" hidden>
+            <div class="inline">
+              <span>Me le rappeler</span>
+              <input type="number" id="f-lead-n" min="1" max="365" value="1" aria-label="Délai">
+              <select id="f-lead-u" aria-label="Unité du délai">
+                <option value="jours">jour(s)</option><option value="semaines" selected>semaine(s)</option><option value="mois">mois</option>
+              </select>
+              <span>avant</span>
+            </div>
+            <div class="inline">
+              <label for="f-until">la fin de la boîte, prévue le</label>
+              <input type="date" id="f-until">
+            </div>
+          </div>
+        </fieldset>
+
+        <p id="f-error" class="error" role="alert" hidden></p>
+        <div class="actions">
+          <button type="submit" class="btn-primary">Enregistrer</button>
+          <button type="button" id="f-delete" class="btn-ghost danger" hidden>Supprimer</button>
+        </div>
+      </form>
+    </section>
+  </main>
+</div>
+
+<nav class="tabs" aria-label="Navigation">
+  <div>
+    <button class="tab" data-go="today" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8.5 15l2.5 2.5 4.5-5"/></svg>
+      Aujourd'hui<span class="pill" id="tab-count" hidden></span>
+    </button>
+    <button class="tab" data-go="meds">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="8.5" width="19" height="7" rx="3.5" transform="rotate(-35 12 12)"/><path d="M9.2 7.9l5.6 8.2"/></svg>
+      Traitements
+    </button>
+    <button class="tab" data-go="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      Réglages
+    </button>
+  </div>
+</nav>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="caducee" viewBox="0 0 512 512"><rect width="512" height="512" fill="#FFFFFF"/><g transform="translate(256 262) scale(0.86) translate(-256 -278)"><path d="M256,150 C214,116 160,102 92,112 C120,128 140,136 156,142 C128,146 106,154 88,170 C128,170 156,168 176,170 C156,178 140,188 130,202 C170,196 210,188 256,186 Z" fill="#C8102E"/><path d="M256,150 C214,116 160,102 92,112 C120,128 140,136 156,142 C128,146 106,154 88,170 C128,170 156,168 176,170 C156,178 140,188 130,202 C170,196 210,188 256,186 Z" fill="#C8102E" transform="translate(512 0) scale(-1 1)"/><rect x="245" y="112" width="22" height="342" rx="11" fill="#C8102E"/><circle cx="256" cy="102" r="21" fill="#C8102E"/><path d="M256.0,440.0 L260.2,438.2 L264.5,436.5 L268.7,434.8 L272.8,433.0 L276.9,431.2 L280.8,429.5 L284.6,427.8 L288.1,426.0 L291.4,424.2 L294.5,422.5 L297.2,420.8 L299.7,419.0 L301.7,417.2 L303.5,415.5 L304.8,413.8 L305.7,412.0 L306.2,410.2 L306.3,408.5 L306.0,406.8 L305.3,405.0 L304.1,403.2 L302.5,401.5 L300.5,399.8 L298.1,398.0 L295.3,396.2 L292.1,394.5 L288.7,392.8 L284.9,391.0 L280.8,389.2 L276.5,387.5 L271.9,385.8 L267.2,384.0 L262.4,382.2 L257.4,380.5 L252.4,378.8 L247.4,377.0 L242.4,375.2 L237.5,373.5 L232.7,371.8 L228.0,370.0 L223.5,368.2 L219.3,366.5 L215.3,364.8 L211.7,363.0 L208.4,361.2 L205.5,359.5 L202.9,357.8 L200.8,356.0 L199.2,354.2 L198.0,352.5 L197.3,350.8 L197.1,349.0 L197.4,347.2 L198.1,345.5 L199.4,343.8 L201.2,342.0 L203.4,340.2 L206.1,338.5 L209.3,336.8 L212.9,335.0 L216.8,333.2 L221.2,331.5 L225.8,329.8 L230.8,328.0 L236.0,326.2 L241.4,324.5 L247.0,322.8 L252.7,321.0 L258.5,319.2 L264.3,317.5 L270.1,315.8 L275.8,314.0 L281.4,312.2 L286.8,310.5 L292.0,308.8 L296.9,307.0 L301.5,305.2 L305.8,303.5 L309.7,301.8 L313.2,300.0 L316.2,298.2 L318.7,296.5 L320.7,294.8 L322.2,293.0 L323.1,291.2 L323.5,289.5 L323.3,287.8 L322.5,286.0 L321.2,284.2 L319.3,282.5 L316.8,280.8 L313.9,279.0 L310.4,277.2 L306.4,275.5 L302.0,273.8 L297.1,272.0 L291.9,270.2 L286.4,268.5 L280.5,266.8 L274.4,265.0 L268.1,263.2 L261.6,261.5 L255.1,259.8 L248.5,258.0 L241.9,256.2 L235.4,254.5 L229.0,252.8 L222.9,251.0 L216.9,249.2 L211.3,247.5 L205.9,245.8 L201.0,244.0 L196.5,242.2 L192.5,240.5 L189.0,238.8 L186.0,237.0 L183.6,235.2 L181.8,233.5 L180.6,231.8 L180.0,230.0" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/><path d="M256.0,440.0 L260.2,438.2 L264.5,436.5 L268.7,434.8 L272.8,433.0 L276.9,431.2 L280.8,429.5 L284.6,427.8 L288.1,426.0 L291.4,424.2 L294.5,422.5 L297.2,420.8 L299.7,419.0 L301.7,417.2 L303.5,415.5 L304.8,413.8 L305.7,412.0 L306.2,410.2 L306.3,408.5 L306.0,406.8 L305.3,405.0 L304.1,403.2 L302.5,401.5 L300.5,399.8 L298.1,398.0 L295.3,396.2 L292.1,394.5 L288.7,392.8 L284.9,391.0 L280.8,389.2 L276.5,387.5 L271.9,385.8 L267.2,384.0 L262.4,382.2 L257.4,380.5 L252.4,378.8 L247.4,377.0 L242.4,375.2 L237.5,373.5 L232.7,371.8 L228.0,370.0 L223.5,368.2 L219.3,366.5 L215.3,364.8 L211.7,363.0 L208.4,361.2 L205.5,359.5 L202.9,357.8 L200.8,356.0 L199.2,354.2 L198.0,352.5 L197.3,350.8 L197.1,349.0 L197.4,347.2 L198.1,345.5 L199.4,343.8 L201.2,342.0 L203.4,340.2 L206.1,338.5 L209.3,336.8 L212.9,335.0 L216.8,333.2 L221.2,331.5 L225.8,329.8 L230.8,328.0 L236.0,326.2 L241.4,324.5 L247.0,322.8 L252.7,321.0 L258.5,319.2 L264.3,317.5 L270.1,315.8 L275.8,314.0 L281.4,312.2 L286.8,310.5 L292.0,308.8 L296.9,307.0 L301.5,305.2 L305.8,303.5 L309.7,301.8 L313.2,300.0 L316.2,298.2 L318.7,296.5 L320.7,294.8 L322.2,293.0 L323.1,291.2 L323.5,289.5 L323.3,287.8 L322.5,286.0 L321.2,284.2 L319.3,282.5 L316.8,280.8 L313.9,279.0 L310.4,277.2 L306.4,275.5 L302.0,273.8 L297.1,272.0 L291.9,270.2 L286.4,268.5 L280.5,266.8 L274.4,265.0 L268.1,263.2 L261.6,261.5 L255.1,259.8 L248.5,258.0 L241.9,256.2 L235.4,254.5 L229.0,252.8 L222.9,251.0 L216.9,249.2 L211.3,247.5 L205.9,245.8 L201.0,244.0 L196.5,242.2 L192.5,240.5 L189.0,238.8 L186.0,237.0 L183.6,235.2 L181.8,233.5 L180.6,231.8 L180.0,230.0" fill="none" stroke="#C8102E" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="192.0" cy="224.0" rx="25" ry="16" fill="#FFFFFF" transform="rotate(-20 192.0 224.0)"/><ellipse cx="192.0" cy="224.0" rx="19" ry="11.5" fill="#C8102E" transform="rotate(-20 192.0 224.0)"/><circle cx="198.0" cy="219.0" r="3" fill="#FFFFFF"/><path d="M256.0,440.0 L251.8,438.2 L247.5,436.5 L243.3,434.8 L239.2,433.0 L235.1,431.2 L231.2,429.5 L227.4,427.8 L223.9,426.0 L220.6,424.2 L217.5,422.5 L214.8,420.8 L212.3,419.0 L210.3,417.2 L208.5,415.5 L207.2,413.8 L206.3,412.0 L205.8,410.2 L205.7,408.5 L206.0,406.8 L206.7,405.0 L207.9,403.2 L209.5,401.5 L211.5,399.8 L213.9,398.0 L216.7,396.2 L219.9,394.5 L223.3,392.8 L227.1,391.0 L231.2,389.2 L235.5,387.5 L240.1,385.8 L244.8,384.0 L249.6,382.2 L254.6,380.5 L259.6,378.8 L264.6,377.0 L269.6,375.2 L274.5,373.5 L279.3,371.8 L284.0,370.0 L288.5,368.2 L292.7,366.5 L296.7,364.8 L300.3,363.0 L303.6,361.2 L306.5,359.5 L309.1,357.8 L311.2,356.0 L312.8,354.2 L314.0,352.5 L314.7,350.8 L314.9,349.0 L314.6,347.2 L313.9,345.5 L312.6,343.8 L310.8,342.0 L308.6,340.2 L305.9,338.5 L302.7,336.8 L299.1,335.0 L295.2,333.2 L290.8,331.5 L286.2,329.8 L281.2,328.0 L276.0,326.2 L270.6,324.5 L265.0,322.8 L259.3,321.0 L253.5,319.2 L247.7,317.5 L241.9,315.8 L236.2,314.0 L230.6,312.2 L225.2,310.5 L220.0,308.8 L215.1,307.0 L210.5,305.2 L206.2,303.5 L202.3,301.8 L198.8,300.0 L195.8,298.2 L193.3,296.5 L191.3,294.8 L189.8,293.0 L188.9,291.2 L188.5,289.5 L188.7,287.8 L189.5,286.0 L190.8,284.2 L192.7,282.5 L195.2,280.8 L198.1,279.0 L201.6,277.2 L205.6,275.5 L210.0,273.8 L214.9,272.0 L220.1,270.2 L225.6,268.5 L231.5,266.8 L237.6,265.0 L243.9,263.2 L250.4,261.5 L256.9,259.8 L263.5,258.0 L270.1,256.2 L276.6,254.5 L283.0,252.8 L289.1,251.0 L295.1,249.2 L300.7,247.5 L306.1,245.8 L311.0,244.0 L315.5,242.2 L319.5,240.5 L323.0,238.8 L326.0,237.0 L328.4,235.2 L330.2,233.5 L331.4,231.8 L332.0,230.0" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/><path d="M256.0,440.0 L251.8,438.2 L247.5,436.5 L243.3,434.8 L239.2,433.0 L235.1,431.2 L231.2,429.5 L227.4,427.8 L223.9,426.0 L220.6,424.2 L217.5,422.5 L214.8,420.8 L212.3,419.0 L210.3,417.2 L208.5,415.5 L207.2,413.8 L206.3,412.0 L205.8,410.2 L205.7,408.5 L206.0,406.8 L206.7,405.0 L207.9,403.2 L209.5,401.5 L211.5,399.8 L213.9,398.0 L216.7,396.2 L219.9,394.5 L223.3,392.8 L227.1,391.0 L231.2,389.2 L235.5,387.5 L240.1,385.8 L244.8,384.0 L249.6,382.2 L254.6,380.5 L259.6,378.8 L264.6,377.0 L269.6,375.2 L274.5,373.5 L279.3,371.8 L284.0,370.0 L288.5,368.2 L292.7,366.5 L296.7,364.8 L300.3,363.0 L303.6,361.2 L306.5,359.5 L309.1,357.8 L311.2,356.0 L312.8,354.2 L314.0,352.5 L314.7,350.8 L314.9,349.0 L314.6,347.2 L313.9,345.5 L312.6,343.8 L310.8,342.0 L308.6,340.2 L305.9,338.5 L302.7,336.8 L299.1,335.0 L295.2,333.2 L290.8,331.5 L286.2,329.8 L281.2,328.0 L276.0,326.2 L270.6,324.5 L265.0,322.8 L259.3,321.0 L253.5,319.2 L247.7,317.5 L241.9,315.8 L236.2,314.0 L230.6,312.2 L225.2,310.5 L220.0,308.8 L215.1,307.0 L210.5,305.2 L206.2,303.5 L202.3,301.8 L198.8,300.0 L195.8,298.2 L193.3,296.5 L191.3,294.8 L189.8,293.0 L188.9,291.2 L188.5,289.5 L188.7,287.8 L189.5,286.0 L190.8,284.2 L192.7,282.5 L195.2,280.8 L198.1,279.0 L201.6,277.2 L205.6,275.5 L210.0,273.8 L214.9,272.0 L220.1,270.2 L225.6,268.5 L231.5,266.8 L237.6,265.0 L243.9,263.2 L250.4,261.5 L256.9,259.8 L263.5,258.0 L270.1,256.2 L276.6,254.5 L283.0,252.8 L289.1,251.0 L295.1,249.2 L300.7,247.5 L306.1,245.8 L311.0,244.0 L315.5,242.2 L319.5,240.5 L323.0,238.8 L326.0,237.0 L328.4,235.2 L330.2,233.5 L331.4,231.8 L332.0,230.0" fill="none" stroke="#C8102E" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="320.0" cy="224.0" rx="25" ry="16" fill="#FFFFFF" transform="rotate(20 320.0 224.0)"/><ellipse cx="320.0" cy="224.0" rx="19" ry="11.5" fill="#C8102E" transform="rotate(20 320.0 224.0)"/><circle cx="314.0" cy="219.0" r="3" fill="#FFFFFF"/></g></symbol>
+</svg>
+
+<script>
+(function(){
+"use strict";
+var MOMENTS=["matin","midi","soir"];
+var MOMENT_LABEL={matin:"Matin",midi:"Midi",soir:"Soir"};
+var MEAL_LABEL={avant:"Avant le repas",pendant:"Pendant le repas",apres:"Après le repas",aucune:"Sans préférence"};
+var DAY_LETTERS=["D","L","M","M","J","V","S"];
+var DAY_NAMES=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+var MONTHS=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+var PRESETS=[
+  {name:"Rouge et blanc",p:"#C8102E",b:"#FFFFFF"},
+  {name:"Vert officine",p:"#0E7A55",b:"#FFFFFF"},
+  {name:"Bleu",p:"#1F5FBF",b:"#FFFFFF"},
+  {name:"Prune",p:"#7A2E6B",b:"#FBF8FA"},
+  {name:"Nuit",p:"#FF5A6E",b:"#16121A"}
+];
+var KEY="medicalendar.v1";
+
+/* ---------- Dates ---------- */
+function pad(n){return (n<10?"0":"")+n}
+function dk(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+function pd(s){var a=s.split("-");return new Date(+a[0],+a[1]-1,+a[2])}
+function mid(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
+function addDays(d,n){var x=new Date(d);x.setDate(x.getDate()+n);return x}
+function dim(y,m){return new Date(y,m+1,0).getDate()}
+function addMonths(d,n){var y=d.getFullYear(),m=d.getMonth()+n;var t=new Date(y,m,1);t.setDate(Math.min(d.getDate(),dim(t.getFullYear(),t.getMonth())));return t}
+function diffDays(a,b){return Math.round((mid(b)-mid(a))/864e5)}
+function shift(d,n,unit){return unit==="mois"?addMonths(d,n):addDays(d,unit==="semaines"?7*n:n)}
+var MON_S=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+function fmtShort(d){return d.getDate()+" "+MON_S[d.getMonth()]}
+function fmtLong(d){return DAY_NAMES[d.getDay()]+" "+d.getDate()+" "+MONTHS[d.getMonth()]}
+function unitLabel(n,u){if(u==="mois")return n+" mois";if(u==="semaines")return n+(n>1?" semaines":" semaine");return n+(n>1?" jours":" jour")}
+
+/* ---------- Planning ---------- */
+function isDue(med,date){
+  if(med.mode==="daily")return true;
+  if(med.mode==="weekdays")return med.days.indexOf(date.getDay())>-1;
+  if(med.mode==="interval"){
+    var s=pd(med.start),n=Math.max(1,med.intN|0),dd=diffDays(s,date);
+    if(dd<0)return false;
+    if(med.intU==="jours")return dd%n===0;
+    if(med.intU==="semaines")return dd%(7*n)===0;
+    var m=(date.getFullYear()-s.getFullYear())*12+date.getMonth()-s.getMonth();
+    return m>=0&&m%n===0&&date.getDate()===Math.min(s.getDate(),dim(date.getFullYear(),date.getMonth()));
+  }
+  return false;
+}
+function dosesFor(date){
+  var out=[];
+  MOMENTS.forEach(function(mo){state.meds.forEach(function(med){
+    if(med.moments.indexOf(mo)>-1&&isDue(med,date))out.push({med:med,moment:mo,id:med.id+"|"+mo});
+  })});
+  return out;
+}
+function isTaken(key,id){return !!(state.log[key]&&state.log[key][id])}
+function pendingToday(){var k=dk(new Date());return dosesFor(new Date()).filter(function(d){return !isTaken(k,d.id)})}
+function orderInfo(med){
+  if(!med.order||!med.order.enabled||!med.order.until)return null;
+  var until=pd(med.order.until),remind=shift(until,-(med.order.leadN|0),med.order.leadU);
+  return {until:until,remind:remind,due:diffDays(remind,new Date())>=0,left:diffDays(new Date(),until)};
+}
+function dueOrders(){return state.meds.filter(function(m){var o=orderInfo(m);return o&&o.due})}
+
+/* ---------- État ---------- */
+var state;
+function defaults(){
+  var t=new Date();
+  return {
+    meds:[
+      {id:"ex1",example:true,name:"Levothyrox 75 µg",moments:["matin"],meal:"avant",mode:"daily",days:[],intN:1,intU:"jours",start:dk(t),order:{enabled:true,leadN:1,leadU:"semaines",until:dk(addDays(t,5))}},
+      {id:"ex2",example:true,name:"Kardégic 75 mg",moments:["midi"],meal:"pendant",mode:"daily",days:[],intN:1,intU:"jours",start:dk(t),order:{enabled:false,leadN:1,leadU:"semaines",until:""}},
+      {id:"ex3",example:true,name:"Magnésium B6",moments:["matin","soir"],meal:"apres",mode:"weekdays",days:[1,3,5],intN:1,intU:"jours",start:dk(t),order:{enabled:false,leadN:1,leadU:"semaines",until:""}},
+      {id:"ex4",example:true,name:"Vitamine D 100 000 UI",moments:["midi"],meal:"pendant",mode:"interval",days:[],intN:3,intU:"mois",start:dk(t),order:{enabled:false,leadN:1,leadU:"semaines",until:""}}
+    ],
+    log:{},notified:{},
+    settings:{times:{matin:"08:00",midi:"12:30",soir:"19:30"},primary:"#C8102E",bg:"#FFFFFF"}
+  };
+}
+function load(){
+  try{var raw=localStorage.getItem(KEY);if(raw){var s=JSON.parse(raw);if(s&&s.meds)return s}}catch(e){}
+  return defaults();
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}updateBadge()}
+state=load();
+state.notified=state.notified||{};state.log=state.log||{};
+
+/* ---------- Utilitaires ---------- */
+function $(s,r){return (r||document).querySelector(s)}
+function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+var toastT;
+function toast(msg){var t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},2400)}
+function lum(hex){var h=hex.replace("#","");var c=[0,2,4].map(function(i){var v=parseInt(h.substr(i,2),16)/255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}
+var CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+/* ---------- Thème ---------- */
+function applyTheme(){
+  var p=state.settings.primary,b=state.settings.bg,r=document.documentElement.style;
+  var dark=lum(b)<.4;
+  r.setProperty("--primary",p);r.setProperty("--bg",b);
+  r.setProperty("--ink",dark?"#F5EEF0":"#1F1416");
+  r.setProperty("--on-primary",lum(p)>.5?"#1F1416":"#FFFFFF");
+  r.setProperty("color-scheme",dark?"dark":"light");
+  var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",b);
+}
+
+/* ---------- Navigation ---------- */
+var current="today";
+function go(v){
+  current=v;
+  ["today","meds","settings","form"].forEach(function(x){$("#v-"+x).hidden=x!==v});
+  $$(".tab").forEach(function(t){if(t.dataset.go===v||(v==="form"&&t.dataset.go==="meds"))t.setAttribute("aria-current","page");else t.removeAttribute("aria-current")});
+  render();window.scrollTo(0,0);
+}
+document.addEventListener("click",function(e){
+  var g=e.target.closest("[data-go]");if(g){go(g.dataset.go);return}
+  if(e.target.closest("[data-new]")||e.target.closest("#quick-add")){openForm(null);return}
+});
+
+/* ---------- Vue Aujourd'hui ---------- */
+var showTaken=false;
+function renderToday(){
+  var now=new Date(),key=dk(now),all=dosesFor(now);
+  var pend=all.filter(function(d){return !isTaken(key,d.id)}),taken=all.length-pend.length;
+  var h="";
+  h+='<div class="hero"><span class="eyebrow">'+esc(fmtLong(now))+'</span>';
+  if(all.length){h+='<span class="count">'+pend.length+'</span><h1 id="today-title">'+(pend.length===1?"prise restante":pend.length?"prises restantes":"Tout est pris")+'</h1>'}
+  else h+='<h1 id="today-title">Rien à prendre aujourd\'hui</h1>';
+  h+='</div>';
+
+  // Semaine
+  var monday=addDays(mid(now),-((now.getDay()+6)%7));h+='<div class="week" aria-label="Cette semaine">';
+  for(var i=0;i<7;i++){
+    var d=addDays(monday,i),ds=dosesFor(d),k=dk(d),tk=ds.filter(function(x){return isTaken(k,x.id)}).length;
+    var pct=ds.length?Math.round(tk/ds.length*100):0,isT=k===key;
+    h+='<div class="day'+(isT?" today":"")+'" aria-label="'+DAY_NAMES[d.getDay()]+" "+d.getDate()+" : "+tk+" sur "+ds.length+'"><span class="l">'+DAY_LETTERS[d.getDay()]+'</span><span class="n">'+d.getDate()+'</span><span class="bar"><i style="width:'+pct+'%"></i></span></div>';
+  }
+  h+='</div>';
+
+  // Commandes
+  dueOrders().forEach(function(m){
+    var o=orderInfo(m);
+    var when=o.left>1?"La boîte se termine dans "+o.left+" jours ("+fmtShort(o.until)+")":o.left===1?"La boîte se termine demain":o.left===0?"La boîte se termine aujourd'hui":"La boîte devait se terminer le "+fmtShort(o.until);
+    h+='<div class="alert" data-order="'+m.id+'"><div><div class="t">À commander : '+esc(m.name)+'</div><div class="s">'+when+'.</div></div>'+
+       '<div class="row" data-step="ask"><button class="btn-primary btn-sm" data-ordered>C\'est commandé</button></div>'+
+       '<div class="row" data-step="date" hidden><label for="nu-'+m.id+'">Nouvelle fin de boîte</label><input type="date" id="nu-'+m.id+'" value="'+dk(addDays(o.until<now?now:o.until,30))+'"><button class="btn-primary btn-sm" data-ordered-save>Valider</button></div></div>';
+  });
+
+  if(state.meds.some(function(m){return m.example}))
+    h+='<div class="note"><span>Ce sont des exemples pour découvrir l\'app.</span><button class="btn-ghost btn-sm" id="clear-ex">Effacer les exemples</button></div>';
+
+  // Compartiments
+  if(all.length&&!pend.length){h+='<div class="done"><span class="big">Bravo, c\'est fait pour aujourd\'hui</span><span class="muted">'+taken+' prise'+(taken>1?"s":"")+' cochée'+(taken>1?"s":"")+'.</span></div>'}
+  MOMENTS.forEach(function(mo){
+    var list=all.filter(function(d){return d.moment===mo&&(showTaken||!isTaken(key,d.id))});
+    if(!list.length)return;
+    h+='<section class="slot"><div class="slot-h"><h2>'+MOMENT_LABEL[mo]+'</h2><span class="time">'+state.settings.times[mo].replace(":","h")+'</span></div>';
+    list.forEach(function(d){var tk=isTaken(key,d.id);
+      h+='<div class="dose'+(tk?" taken":"")+'"><button class="box" role="checkbox" aria-checked="'+tk+'" data-dose="'+esc(d.id)+'" aria-label="'+esc(d.med.name)+', '+MOMENT_LABEL[mo]+'">'+CHECK+'</button><div class="txt"><span class="name">'+esc(d.med.name)+'</span><span class="meal">'+MEAL_LABEL[d.med.meal]+'</span></div></div>';
+    });
+    h+='</section>';
+  });
+  if(taken)h+='<button class="linkbtn" id="toggle-taken">'+(showTaken?"Masquer les prises faites":"Voir les prises faites ("+taken+")")+'</button>';
+  if(!state.meds.length)h+='<div class="done"><span class="big">Aucun traitement</span><span class="muted">Ajoutez votre premier médicament pour recevoir vos rappels.</span><button class="btn-primary" data-new>+ Ajouter un médicament</button></div>';
+  $("#v-today").innerHTML=h;
+}
+$("#v-today").addEventListener("click",function(e){
+  var b=e.target.closest("[data-dose]");
+  if(b){
+    var key=dk(new Date()),id=b.dataset.dose,was=isTaken(key,id);
+    state.log[key]=state.log[key]||{};
+    if(was)delete state.log[key][id];else state.log[key][id]=Date.now();
+    save();
+    b.setAttribute("aria-checked",String(!was));
+    var row=b.closest(".dose");
+    if(!was&&!showTaken){row.classList.add("leaving");setTimeout(renderToday,320)}else renderToday();
+    updateTabCount();return;
+  }
+  if(e.target.id==="toggle-taken"){showTaken=!showTaken;renderToday();return}
+  if(e.target.id==="clear-ex"){state.meds=state.meds.filter(function(m){return !m.example});save();render();toast("Exemples effacés");return}
+  var al=e.target.closest("[data-order]");
+  if(al&&e.target.closest("[data-ordered]")){$('[data-step="ask"]',al).hidden=true;$('[data-step="date"]',al).hidden=false;$("input",al).focus();return}
+  if(al&&e.target.closest("[data-ordered-save]")){
+    var v=$("input",al).value,m=state.meds.find(function(x){return x.id===al.dataset.order});
+    if(!v){toast("Indiquez la nouvelle date de fin de boîte");return}
+    m.order.until=v;save();renderToday();toast("Commande notée");
+  }
+});
+
+/* ---------- Vue Traitements ---------- */
+function summary(m){
+  var s=m.moments.map(function(x){return MOMENT_LABEL[x]}).join(", ")+" · "+MEAL_LABEL[m.meal].toLowerCase()+" · ";
+  if(m.mode==="daily")s+="tous les jours";
+  else if(m.mode==="weekdays")s+=[1,2,3,4,5,6,0].filter(function(d){return m.days.indexOf(d)>-1}).map(function(d){return DAY_NAMES[d].slice(0,3)+"."}).join(" ");
+  else s+=(m.intN==1&&m.intU!=="jours"?(m.intU==="mois"?"tous les mois":"toutes les semaines"):(m.intU==="semaines"?"toutes les "+m.intN+" semaines":"tous les "+m.intN+" "+m.intU));
+  return s;
+}
+function renderMeds(){
+  var h="";
+  if(!state.meds.length)h='<p class="muted">Aucun médicament pour le moment.</p>';
+  state.meds.forEach(function(m){
+    var o=orderInfo(m),extra=o?'<span class="sum">Commande : rappel '+unitLabel(m.order.leadN,m.order.leadU)+" avant le "+fmtShort(o.until)+'</span>':"";
+    h+='<button class="item" data-edit="'+m.id+'"><span class="txt"><span class="name">'+esc(m.name)+(m.example?'<span class="tag">exemple</span>':"")+'</span><span class="sum">'+esc(summary(m))+'</span>'+extra+'</span><span class="chev" aria-hidden="true">›</span></button>';
+  });
+  $("#meds-list").innerHTML=h;
+}
+$("#meds-list").addEventListener("click",function(e){var b=e.target.closest("[data-edit]");if(b)openForm(b.dataset.edit)});
+
+/* ---------- Formulaire ---------- */
+var editing=null,delArmed=false,delT;
+function setPressed(wrap,vals){$$(".chip",wrap).forEach(function(c){c.setAttribute("aria-pressed",String(vals.indexOf(c.dataset.v)>-1))})}
+function pressed(wrap){return $$(".chip",wrap).filter(function(c){return c.getAttribute("aria-pressed")==="true"}).map(function(c){return c.dataset.v})}
+function syncForm(){
+  var mode=($('input[name="mode"]:checked')||{}).value;
+  $("#f-days-wrap").hidden=mode!=="weekdays";$("#f-int-wrap").hidden=mode!=="interval";
+  $("#f-order-wrap").hidden=!$("#f-order").checked;
+}
+function openForm(id){
+  editing=id?state.meds.find(function(m){return m.id===id}):null;
+  var m=editing||{name:"",moments:[],meal:"aucune",mode:"daily",days:[],intN:2,intU:"jours",start:dk(new Date()),order:{enabled:false,leadN:1,leadU:"semaines",until:""}};
+  $("#form-title").textContent=editing?"Modifier le médicament":"Nouveau médicament";
+  $("#f-name").value=m.name;
+  setPressed($("#f-moments"),m.moments);
+  $("#m-"+m.meal).checked=true;
+  $('input[name="mode"][value="'+m.mode+'"]').checked=true;
+  setPressed($("#f-days"),m.days.map(String));
+  $("#f-int-n").value=m.intN;$("#f-int-u").value=m.intU;$("#f-int-start").value=m.start||dk(new Date());
+  $("#f-order").checked=!!m.order.enabled;$("#f-lead-n").value=m.order.leadN;$("#f-lead-u").value=m.order.leadU;$("#f-until").value=m.order.until||"";
+  $("#f-delete").hidden=!editing;$("#f-delete").textContent="Supprimer";delArmed=false;
+  $("#f-error").hidden=true;
+  syncForm();go("form");
+  if(!editing)setTimeout(function(){$("#f-name").focus()},50);
+}
+$$("#f-moments,#f-days").forEach(function(w){w.addEventListener("click",function(e){var c=e.target.closest(".chip");if(c)c.setAttribute("aria-pressed",String(c.getAttribute("aria-pressed")!=="true"))})});
+$("#medform").addEventListener("change",syncForm);
+function fail(msg){var e=$("#f-error");e.textContent=msg;e.hidden=false}
+$("#medform").addEventListener("submit",function(e){
+  e.preventDefault();
+  var name=$("#f-name").value.trim(),moments=pressed($("#f-moments")),mode=$('input[name="mode"]:checked').value;
+  var days=pressed($("#f-days")).map(Number),order=$("#f-order").checked;
+  if(!name)return fail("Indiquez le nom du médicament.");
+  if(!moments.length)return fail("Choisissez au moins un moment de prise : matin, midi ou soir.");
+  if(mode==="weekdays"&&!days.length)return fail("Choisissez au moins un jour de la semaine.");
+  if(mode==="interval"&&!(+$("#f-int-n").value>0&&$("#f-int-start").value))return fail("Indiquez l'intervalle et la date de début.");
+  if(order&&!(+$("#f-lead-n").value>0&&$("#f-until").value))return fail("Indiquez le délai de rappel et la date de fin de la boîte.");
+  var m=editing||{id:"m"+Date.now().toString(36)};
+  m.name=name;m.moments=MOMENTS.filter(function(x){return moments.indexOf(x)>-1});
+  m.meal=$('input[name="meal"]:checked').value;m.mode=mode;m.days=days;
+  m.intN=Math.max(1,+$("#f-int-n").value|0);m.intU=$("#f-int-u").value;m.start=$("#f-int-start").value||dk(new Date());
+  m.order={enabled:order,leadN:Math.max(1,+$("#f-lead-n").value|0),leadU:$("#f-lead-u").value,until:$("#f-until").value};
+  delete m.example;
+  if(!editing)state.meds.push(m);
+  save();go("today");toast(editing?"Médicament modifié":"Médicament ajouté");
+});
+$("#f-delete").addEventListener("click",function(){
+  if(!delArmed){delArmed=true;this.textContent="Confirmer la suppression";clearTimeout(delT);var b=this;delT=setTimeout(function(){delArmed=false;b.textContent="Supprimer"},4000);return}
+  state.meds=state.meds.filter(function(m){return m!==editing});save();go("meds");toast("Médicament supprimé");
+});
+
+/* ---------- Réglages ---------- */
+function notifState(){
+  if(!("Notification" in window))return "unsupported";
+  try{return Notification.permission}catch(e){return "unsupported"}
+}
+function renderSettings(){
+  MOMENTS.forEach(function(m){$("#t-"+m).value=state.settings.times[m]});
+  var ns=notifState(),st=$("#notif-status"),bt=$("#notif-btn");
+  st.textContent=ns==="granted"?"Notifications activées.":ns==="denied"?"Notifications bloquées. Autorisez-les dans les réglages du téléphone pour MediCalendar.":ns==="unsupported"?"Ce navigateur ne gère pas les notifications ici. Installez l'app sur l'écran d'accueil.":"Notifications désactivées.";
+  bt.hidden=ns!=="default";
+  var h="";PRESETS.forEach(function(p,i){var on=p.p.toLowerCase()===state.settings.primary.toLowerCase()&&p.b.toLowerCase()===state.settings.bg.toLowerCase();
+    h+='<button class="sw" data-preset="'+i+'" aria-pressed="'+on+'" aria-label="'+p.name+'" title="'+p.name+'" style="background:'+p.b+'"><span style="background:'+p.p+'"></span></button>'});
+  $("#swatches").innerHTML=h;
+  $("#c-primary").value=state.settings.primary;$("#c-bg").value=state.settings.bg;
+}
+MOMENTS.forEach(function(m){$("#t-"+m).addEventListener("change",function(){if(this.value){state.settings.times[m]=this.value;if(state.notified[dk(new Date())])delete state.notified[dk(new Date())][m];save();toast("Heure du "+m+" : "+this.value.replace(":","h"))}})});
+$("#swatches").addEventListener("click",function(e){var b=e.target.closest("[data-preset]");if(!b)return;var p=PRESETS[+b.dataset.preset];state.settings.primary=p.p;state.settings.bg=p.b;applyTheme();save();renderSettings()});
+$("#c-primary").addEventListener("input",function(){state.settings.primary=this.value;applyTheme();save()});
+$("#c-bg").addEventListener("input",function(){state.settings.bg=this.value;applyTheme();save()});
+$$("#c-primary,#c-bg").forEach(function(i){i.addEventListener("change",renderSettings)});
+$("#notif-btn").addEventListener("click",function(){
+  try{Notification.requestPermission().then(function(){renderSettings();if(notifState()==="granted")toast("Notifications activées")})}catch(e){renderSettings()}
+});
+var resetArmed=false;
+$("#reset-all").addEventListener("click",function(){
+  if(!resetArmed){resetArmed=true;this.textContent="Confirmer : tout effacer";var b=this;setTimeout(function(){resetArmed=false;b.textContent="Effacer toutes les données"},4000);return}
+  state={meds:[],log:{},notified:{},settings:{times:{matin:"08:00",midi:"12:30",soir:"19:30"},primary:"#C8102E",bg:"#FFFFFF"}};
+  applyTheme();save();resetArmed=false;this.textContent="Effacer toutes les données";go("today");toast("Données effacées");
+});
+
+/* ---------- Rappels, notifications, pastille ---------- */
+var swReg=null;
+function notify(title,body,tag){
+  if(notifState()!=="granted")return;
+  var opts={body:body,tag:tag,icon:"icons/icon-192.png",badge:"icons/badge-96.png",renotify:true};
+  try{
+    if(swReg)swReg.showNotification(title,opts);
+    else new Notification(title,opts);
+  }catch(e){}
+}
+function updateBadge(){
+  var n=pendingToday().length;
+  try{if(navigator.setAppBadge){n?navigator.setAppBadge(n):navigator.clearAppBadge()}}catch(e){}
+  updateTabCount(n);
+}
+function updateTabCount(n){if(n==null)n=pendingToday().length;var p=$("#tab-count");p.textContent=n;p.hidden=!n}
+function checkReminders(){
+  var now=new Date(),key=dk(now),st=state.notified[key]=state.notified[key]||{},changed=false;
+  MOMENTS.forEach(function(mo){
+    var a=state.settings.times[mo].split(":"),t=new Date(now);t.setHours(+a[0],+a[1],0,0);
+    if(now>=t&&!st[mo]){
+      st[mo]=1;changed=true;
+      if(now-t<3*3600e3){
+        var list=dosesFor(now).filter(function(d){return d.moment===mo&&!isTaken(key,d.id)});
+        if(list.length)notify("C'est l'heure : "+MOMENT_LABEL[mo].toLowerCase(),list.map(function(d){return d.med.name+" ("+MEAL_LABEL[d.med.meal].toLowerCase()+")"}).join("\n"),"prise-"+mo);
+      }
+    }
+  });
+  var am=state.settings.times.matin.split(":"),tm=new Date(now);tm.setHours(+am[0],+am[1],0,0);
+  if(now>=tm&&!st.order){st.order=1;changed=true;var o=dueOrders();if(o.length)notify("Pensez à commander",o.map(function(m){return m.name}).join(", "),"commande")}
+  Object.keys(state.notified).forEach(function(k){if(k<dk(addDays(now,-7)))delete state.notified[k]});
+  Object.keys(state.log).forEach(function(k){if(k<dk(addDays(now,-60)))delete state.log[k]});
+  if(changed)save();
+}
+var lastDay=dk(new Date());
+function tick(){checkReminders();var k=dk(new Date());if(k!==lastDay){lastDay=k;render()}updateBadge()}
+
+function render(){applyTheme();if(current==="today")renderToday();if(current==="meds")renderMeds();if(current==="settings")renderSettings();updateTabCount()}
+
+/* ---------- Démarrage ---------- */
+try{
+  if("serviceWorker" in navigator&&/^https:|^http:\/\/localhost/.test(location.href)&&window.__MEDICAL_PWA__){
+    navigator.serviceWorker.register("sw.js").then(function(r){swReg=r}).catch(function(){});
+  }
+}catch(e){}
+render();tick();
+setInterval(tick,30000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden){tick();render()}});
+})();
+</script>
+
+</body>
+</html>
