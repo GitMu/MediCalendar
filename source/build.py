@@ -108,7 +108,6 @@ manifest = {
 }
 open(os.path.join(DIST, "manifest.webmanifest"), "w").write(json.dumps(manifest, ensure_ascii=False, indent=2))
 shutil.copy(os.path.join(ROOT, "source", "sw.js"), os.path.join(DIST, "sw.js"))
-shutil.copy(os.path.join(ROOT, "source", "LISEZMOI.md"), os.path.join(DIST, "LISEZMOI.md"))
 
 zp = os.path.join(ROOT, "MediCalendar.zip")
 with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
