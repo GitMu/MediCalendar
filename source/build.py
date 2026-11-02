@@ -1,7 +1,7 @@
 import math, json, os, subprocess, shutil, zipfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-DIST = os.path.join(ROOT, "dist")
+DIST = os.path.dirname(ROOT)  # racine du dépôt = site publié
 RED = "#C8102E"
 
 def snake(sign):
@@ -50,8 +50,7 @@ def png(svg, out, size):
     subprocess.run(["rsvg-convert", "-w", str(size), "-h", str(size), tmp, "-o", out], check=True)
     os.remove(tmp)
 
-shutil.rmtree(DIST, ignore_errors=True)
-os.makedirs(os.path.join(DIST, "icons"))
+os.makedirs(os.path.join(DIST, "icons"), exist_ok=True)
 icons = os.path.join(DIST, "icons")
 open(os.path.join(icons, "icon.svg"), "w").write(icon_svg(0.86))
 png(icon_svg(0.86), os.path.join(icons, "icon-192.png"), 192)
@@ -61,14 +60,14 @@ png(icon_svg(0.80), os.path.join(icons, "apple-touch-icon.png"), 180)
 # icône monochrome pour la barre de notifications Android (silhouette sur fond transparent)
 png(icon_svg(0.9, bg=None, color="#FFFFFF", halo="#00000000"), os.path.join(icons, "badge-96.png"), 96)
 
-app = open(os.path.join(ROOT, "source", "app.html")).read()
+app = open(os.path.join(ROOT, "app.html")).read()
 symbol_inner = '<rect width="512" height="512" fill="#FFFFFF"/>' + \
     f'<g transform="translate(256 262) scale(0.86) translate(-256 -278)">{caduceus()}</g>'
 app = app.replace("%CADUCEE%", symbol_inner)
 
 # Aperçu (artifact) : fragment sans service worker
-os.makedirs(os.path.join(ROOT, "preview"), exist_ok=True)
-open(os.path.join(ROOT, "preview", "medicalendar.html"), "w").write(app)
+if os.environ.get("PREVIEW_OUT"):
+    open(os.environ["PREVIEW_OUT"], "w").write(app)
 
 # Version PWA à héberger
 head = """<!doctype html>
@@ -107,12 +106,6 @@ manifest = {
     ],
 }
 open(os.path.join(DIST, "manifest.webmanifest"), "w").write(json.dumps(manifest, ensure_ascii=False, indent=2))
-shutil.copy(os.path.join(ROOT, "source", "sw.js"), os.path.join(DIST, "sw.js"))
+shutil.copy(os.path.join(ROOT, "sw.js"), os.path.join(DIST, "sw.js"))
 
-zp = os.path.join(ROOT, "MediCalendar.zip")
-with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
-    for base, _, files in os.walk(DIST):
-        for f in files:
-            full = os.path.join(base, f)
-            z.write(full, os.path.join("MediCalendar", os.path.relpath(full, DIST)))
-print("ok", zp)
+print("ok")

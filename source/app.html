@@ -203,7 +203,16 @@ input[type=color]{width:48px;height:40px;border:2px solid var(--line);border-rad
 
       <div class="card">
         <h2>Données</h2>
-        <p class="muted">Vos traitements restent sur cet appareil.</p>
+        <p class="muted">Vos traitements restent sur cet appareil. Gardez une sauvegarde dans Fichiers ou iCloud Drive, au cas où vous changeriez de téléphone.</p>
+        <div class="inline">
+          <button class="btn-primary btn-sm" id="backup-save">Sauvegarder mes données</button>
+          <button class="btn-ghost btn-sm" id="backup-open">Restaurer une sauvegarde</button>
+          <input type="file" id="backup-file" accept="application/json,.json" hidden>
+        </div>
+        <div class="alert" id="restore-confirm" hidden>
+          <div class="t" id="restore-text"></div>
+          <div class="row"><button class="btn-primary btn-sm" id="restore-yes">Remplacer mes données</button><button class="btn-ghost btn-sm" id="restore-no">Annuler</button></div>
+        </div>
         <div><button class="btn-ghost btn-sm danger" id="reset-all">Effacer toutes les données</button></div>
       </div>
     </section>
@@ -378,6 +387,9 @@ function dosesFor(date){
 }
 function isTaken(key,id){return !!(state.log[key]&&state.log[key][id])}
 function pendingToday(){var k=dk(new Date());return dosesFor(new Date()).filter(function(d){return !isTaken(k,d.id)})}
+function momentReached(mo,now){var a=state.settings.times[mo].split(":"),t=new Date(now);t.setHours(+a[0],+a[1],0,0);return now>=t}
+/* Prises dont l'heure est arrivée et pas encore cochées (sert à la pastille) */
+function pendingNow(){var now=new Date();return pendingToday().filter(function(d){return momentReached(d.moment,now)})}
 function orderInfo(med){
   if(!med.order||!med.order.enabled||!med.order.until)return null;
   var until=pd(med.order.until),remind=shift(until,-(med.order.leadN|0),med.order.leadU);
@@ -611,6 +623,48 @@ $("#reset-all").addEventListener("click",function(){
   applyTheme();save();resetArmed=false;this.textContent="Effacer toutes les données";go("today");toast("Données effacées");
 });
 
+/* ---------- Sauvegarde ---------- */
+$("#backup-save").addEventListener("click",function(){
+  var now=new Date(),name="medicalendar-sauvegarde-"+dk(now)+".json";
+  var text=JSON.stringify({app:"MediCalendar",format:1,savedAt:now.toISOString(),data:state},null,2);
+  var blob=new Blob([text],{type:"application/json"});
+  var file;try{file=new File([blob],name,{type:"application/json"})}catch(e){}
+  if(file&&navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({files:[file],title:"Sauvegarde MediCalendar"}).then(function(){toast("Sauvegarde prête")}).catch(function(err){if(err&&err.name!=="AbortError")download()});
+  }else download();
+  function download(){
+    try{var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);toast("Sauvegarde téléchargée")}
+    catch(e){toast("Impossible de créer le fichier sur cet appareil")}
+  }
+});
+var pendingRestore=null;
+$("#backup-open").addEventListener("click",function(){$("#backup-file").value="";$("#backup-file").click()});
+$("#backup-file").addEventListener("change",function(){
+  var f=this.files&&this.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){
+    try{
+      var j=JSON.parse(r.result),d=j&&j.data;
+      if(!j||j.app!=="MediCalendar"||!d||!Array.isArray(d.meds)||!d.settings)throw 0;
+      pendingRestore=d;
+      var when=j.savedAt?" du "+fmtLong(new Date(j.savedAt)):"";
+      $("#restore-text").textContent="Remplacer vos "+state.meds.length+" médicament(s) par les "+d.meds.length+" de la sauvegarde"+when+" ?";
+      $("#restore-confirm").hidden=false;
+    }catch(e){toast("Ce fichier n'est pas une sauvegarde MediCalendar")}
+  };
+  r.onerror=function(){toast("Lecture du fichier impossible")};
+  r.readAsText(f);
+});
+$("#restore-no").addEventListener("click",function(){pendingRestore=null;$("#restore-confirm").hidden=true});
+$("#restore-yes").addEventListener("click",function(){
+  if(!pendingRestore)return;
+  var d=pendingRestore;pendingRestore=null;
+  state={meds:d.meds,log:d.log||{},notified:{},settings:{times:Object.assign({matin:"08:00",midi:"12:30",soir:"19:30"},d.settings.times||{}),primary:d.settings.primary||"#C8102E",bg:d.settings.bg||"#FFFFFF"}};
+  var nw=new Date(),ns=state.notified[dk(nw)]={};MOMENTS.forEach(function(mo){if(momentReached(mo,nw))ns[mo]=1});if(momentReached("matin",nw))ns.order=1;
+  $("#restore-confirm").hidden=true;applyTheme();save();go("today");toast("Données restaurées");
+});
+
 /* ---------- Rappels, notifications, pastille ---------- */
 var swReg=null;
 function notify(title,body,tag){
@@ -622,11 +676,11 @@ function notify(title,body,tag){
   }catch(e){}
 }
 function updateBadge(){
-  var n=pendingToday().length;
+  var n=pendingNow().length;
   try{if(navigator.setAppBadge){n?navigator.setAppBadge(n):navigator.clearAppBadge()}}catch(e){}
   updateTabCount(n);
 }
-function updateTabCount(n){if(n==null)n=pendingToday().length;var p=$("#tab-count");p.textContent=n;p.hidden=!n}
+function updateTabCount(n){if(n==null)n=pendingNow().length;var p=$("#tab-count");p.textContent=n;p.hidden=!n}
 function checkReminders(){
   var now=new Date(),key=dk(now),st=state.notified[key]=state.notified[key]||{},changed=false;
   MOMENTS.forEach(function(mo){
